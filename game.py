@@ -2,13 +2,17 @@ from collections import namedtuple
 from random import shuffle
 import sys
 
-SUITS = {'H', 'D', 'S', 'C', 'P'}
+RUN = 'run'
+SET = 'set'
+
+SUITS = {'♥', '♦', '♣', '★', '♠'}
 VALUES = {('3', 3), ('4', 4), ('5', 5), ('6', 6), ('7', 7), ('8', 8), ('9', 9), ('10', 10), ('J', 11), ('Q', 12), ('K', 13)}
 
-round_number =  10
+round_number = 10
 
 Card = namedtuple('Card', {'suit': None, 'value': None, 'int_value': None})
 Card.__repr__ = lambda x: str(x.value) + str(x.suit)
+
 
 class Player:
     def __init__(self):
@@ -41,68 +45,188 @@ class Game:
             print("Sorry, no more cards!")
             sys.exit(0)
 
+    def check_for_set(self):
+        last_card = None
+        run = []
+        for card in self.unmatched:
+            if last_card:
+                if last_card.int_value == card.int_value:
+                    run.append(card)
+                else:
+                    if len(run) > 2:
+                        return run
+                    run = [card]
+            else:
+                run = [card]
+            last_card = card
+        if len(run) > 2:
+            return run
+        return []
+
+    def check_for_run(self):
+        last_card = None
+        run = []
+        for card in self.unmatched:
+            if last_card:
+                if last_card.int_value == card.int_value and last_card.suit == card.suit:
+                    continue
+                if last_card.int_value == card.int_value - 1 and last_card.suit == card.suit:
+                    run.append(card)
+                else:
+                    if len(run) > 2:
+                        return run
+                    run = [card]
+
+            else:
+                run = [card]
+            last_card = card
+        if len(run) > 2:
+            return run
+        return []
+
+    def get_runs_or_sets(self, thing):
+        sets = []
+        while True:
+            if thing == RUN:
+                run = self.check_for_run()
+            else:
+                run = self.check_for_set()
+            for c in run:
+                try:
+                    self.unmatched.remove(c)
+                except ValueError:
+                    pass
+            if not run:
+                break
+            sets.append(run)
+        return sets
+
+    def check_wild_cards(self, setrun, wild_cards):
+        while wild_cards:
+            if setrun == RUN:
+                setrun_obj = self.runs
+                new_setrun = check_for_run_wild(self.unmatched, wild_cards)
+            else:
+                setrun_obj = self.sets
+                new_setrun = check_for_set_wild(self.unmatched, wild_cards)
+
+            if new_setrun:
+                setrun_obj.append(new_setrun)
+            else:
+                if not setrun_obj:
+                    break
+                while wild_cards and setrun_obj:
+                    setrun_obj[0].append(wild_cards.pop())
+                    print("Pairing up wild card with a {}: {}".format(setrun, setrun_obj[0]))
+
+    def play_round(self, player):
+        self.player = player
+        self.rounds = 0
+        self.unmatched = None
+        self.sets = []
+        self.runs = []
+
+        while True:
+            self.rounds += 1
+            self.runs = []
+            self.sets = []
+            wild_cards = player.wild_cards.copy()
+
+            # sort hand
+            self.unmatched = sorted(self.player.hand, key=lambda x: x.int_value)
+
+            self.sets = self.get_runs_or_sets(SET)
+
+            self.check_wild_cards(SET, wild_cards)
+
+            value_sort = sorted(self.unmatched, key=lambda x: x.int_value)
+            self.unmatched = sorted(value_sort, key=lambda x: x.suit)
+
+            self.runs = self.get_runs_or_sets(RUN)
+
+            self.check_wild_cards(RUN, wild_cards)
+
+            print("FIRST PASS")
+            print('runs:')
+            for r in self.runs:
+                show_hand(r)
+            print('sets:')
+            for s in self.sets:
+                show_hand(s)
+
+            first_runs = self.runs
+            first_sets = self.sets
+
+            cards_used = sum([len(r) for r in self.runs + self.sets])
+            print(f'Using {cards_used} cards')
+
+            if cards_used == round_number or len(self.unmatched) < 1:
+                break
+
+            self.sets = []
+            wild_cards = player1.wild_cards.copy()
+
+            first_unmatched = self.unmatched
+
+            # Start second pass, runs first then sets
+
+            self.unmatched = sorted(self.player.hand, key=lambda x: x.int_value)
+            self.unmatched = sorted(self.unmatched, key=lambda x: x.suit)
+
+            self.runs = self.get_runs_or_sets(RUN)
+
+            self.check_wild_cards(RUN, wild_cards)
+
+            self.unmatched = sorted(self.unmatched, key=lambda x: x.int_value)
+
+            self.sets = self.get_runs_or_sets(SET)
+
+            self.check_wild_cards(SET, wild_cards)
+
+            print("SECOND PASS:")
+            print('\nruns:')
+            for r in self.runs:
+                show_hand(r)
+            print('\nsets:')
+            for s in self.sets:
+                show_hand(s)
+
+            cards_used2 = sum([len(r) for r in self.runs + self.sets])
+            print(f'Using {cards_used2} cards')
+
+            if cards_used2 == round_number or len(self.unmatched) < 1:
+                break
+
+            if cards_used > cards_used2:
+                discard(first_unmatched, player1.hand)
+            else:
+                discard(self.unmatched, player1.hand)
+            new_card = game.deal()
+
+            print("**** Drew: ", new_card)
+            if new_card.int_value == 14 or new_card.int_value == round_number:
+                player1.wild_cards.append(new_card)
+            else:
+                player1.hand.append(new_card)
+
+            print("**** NEXT TURN")
+            print(show_hand(player1.hand + player1.wild_cards))
+
+
 def show_hand(cards):
     for c in cards:
         print(c, end=" ")
 
-def check_for_run(hand):
-    last_card = None
-    run = []
-    for card in hand:
-        if last_card:
-            if last_card.int_value == card.int_value and last_card.suit == card.suit:
-                continue
-            if last_card.int_value == card.int_value - 1 and last_card.suit == card.suit:
-                #print('possible run')
-                run.append(card)
-            else:
-                if len(run) > 2:
-                    #print('got a run!')
-                    return run
-                run = [card]
-
-        else:
-            run = [card]
-        last_card = card
-    if len(run) > 2:
-        return run
-    return []
-        # print(run)
-        # possible_downrun = [c for c in player1.hand if c.value == card.int_value - 1]
-        #
-        # possible_uprun = [c for c in player1.hand if c.value == card.int_value - 1]
-
-
-def check_for_set(hand):
-    last_card = None
-    run = []
-    for card in hand:
-        if last_card:
-            #print("comparing " + str(last_card.int_value) + " with " + str(card.int_value))
-            if last_card.int_value == card.int_value:
-                #print('possible set')
-                run.append(card)
-            else:
-                if len(run) > 2:
-                    #print('got a set!')
-                    return run
-                run = [card]
-        else:
-            run = [card]
-            #print('\ngetting started: ', run)
-        last_card = card
-    if len(run) > 2:
-        return run
-    return []
 
 def discard(leftovers, hand):
-    print("heres what i could discard: ", leftovers)
+    print("Heres what i could discard: ", leftovers)
     try:
         hand.remove(leftovers[0])
     except IndexError:
         print("Out of hand")
     else:
-        print('discarding ', leftovers[0])
+        print('**discarding ', leftovers[0])
+
 
 def check_for_set_wild(leftovers, wild_cards):
     if not leftovers or not wild_cards:
@@ -110,40 +234,43 @@ def check_for_set_wild(leftovers, wild_cards):
     print("Wild cards: ", wild_cards)
     print("Leftovers: ", leftovers)
     last_card = None
+
+    # Check for cases where there are two of a set and not three
     if len(leftovers) > 1:
         for card in leftovers:
             if last_card:
                 if last_card.int_value == card.int_value:
                     print("Found a wild match")
                     new_set = [last_card, card, wild_cards.pop()]
+                    print(new_set)
                     leftovers.remove(last_card)
                     leftovers.remove(card)
                     print("LEFTOVERS IS NOW ", leftovers)
                     return new_set
             last_card = card
     else:
+        # If there are two wild cards, pick a card and put it with them
         if len(wild_cards) > 1:
             print("Sticking together two wilds and a leftover")
             return [leftovers[0], wild_cards.pop(), wild_cards.pop()]
 
+
 def check_for_run_wild(leftovers, wild_cards):
     leftovers = sorted(leftovers, key=lambda x: x.int_value)
     leftovers = sorted(leftovers, key=lambda x: x.suit)
-    print("check for run: Wild cards: ", wild_cards)
-    print("Leftovers: ", leftovers)
     last_card = None
     for card in leftovers:
         if last_card:
+            print(last_card)
             if last_card.int_value == card.int_value and last_card.suit == card.suit:
                 continue
             if last_card.int_value == card.int_value - 1 and last_card.suit == card.suit:
-                #print('possible run')
                 new_set = [last_card, card, wild_cards.pop()]
                 leftovers.remove(last_card)
                 leftovers.remove(card)
-                print("LEFTOVERS IS NOW ", leftovers)
                 return new_set
         last_card = card
+
 
 if __name__ == '__main__':
     game = Game()
@@ -166,140 +293,8 @@ if __name__ == '__main__':
 
     show_hand(player1.hand)
 
-    rounds = 0
+    game.rounds = 0
 
-    while True:
-        rounds += 1
-        runs = []
-        sets = []
-        wild_cards = player1.wild_cards.copy()
+    game.play_round(player1)
 
-        # sort hand
-        vsort_value = sorted(player1.hand, key=lambda x: x.int_value)
-        #print("I'll be set evaluating ", vsort_value)
-        while True:
-            run = check_for_set(vsort_value)
-            #print("THE SET", run)
-            for c in run:
-                try:
-                    vsort_value.remove(c)
-                except ValueError:
-                    pass
-            if not run:
-                break
-            sets.append(run)
-        while wild_cards:
-            new_set = check_for_set_wild(vsort_value, wild_cards)
-            print("VSORT_VALUE IS NOW ", vsort_value)
-            if new_set:
-                sets.append(new_set)
-            else:
-                while wild_cards and sets:
-                    sets[0].append(wild_cards.pop())
-                    print("Paring up wild card with a set: {}".format(sets[0]))
-                break
-
-        vsort_suit = sorted(vsort_value, key=lambda x: x.int_value)
-        vsort_suit = sorted(vsort_suit, key=lambda x: x.suit)
-        while True:
-            run = check_for_run(vsort_suit)
-            for c in run:
-                try:
-                    vsort_suit.remove(c)
-                except ValueError:
-                    pass
-            if not run:
-                break
-            runs.append(run)
-        while wild_cards:
-            new_run = check_for_run_wild(vsort_suit, wild_cards)
-            if new_run:
-                runs.append(new_run)
-            else:
-                while wild_cards and runs:
-                    runs[0].append(wild_cards.pop())
-                    print("Pairing up wild card with a set: {}".format(runs[0]))
-                break
-
-        print('runs:')
-        for r in runs:
-            show_hand(r)
-        print('sets:')
-        for s in sets:
-            show_hand(s)
-
-        cards_used = sum([len(r) for r in runs+sets])
-        print('taking cards: ', cards_used)
-
-        if cards_used == round_number or len(vsort_suit) < 1:
-            break
-
-        runs = []
-        sets = []
-        wild_cards = player1.wild_cards.copy()
-
-        vsort_suit2 = sorted(player1.hand, key=lambda x: x.int_value)
-        vsort_suit2 = sorted(vsort_suit2, key=lambda x: x.suit)
-        while True:
-            run = check_for_run(vsort_suit2)
-            for c in run:
-                vsort_suit2.remove(c)
-            if not run:
-                break
-            runs.append(run)
-        while wild_cards:
-            new_run = check_for_run_wild(vsort_suit2, wild_cards)
-            if new_run:
-                runs.append(new_run)
-            else:
-                while wild_cards and runs:
-                    runs[0].append(wild_cards.pop())
-                    print("Pairing up wild card with a set: {}".format(runs[0]))
-                break
-
-        vsort_value2 = sorted(vsort_suit2, key=lambda x: x.int_value)
-        while True:
-            run = check_for_set(vsort_value2)
-            for c in run:
-                vsort_value2.remove(c)
-            if not run:
-                break
-            sets.append(run)
-        while wild_cards:
-            new_set = check_for_set_wild(vsort_value2, wild_cards)
-            if new_set:
-                sets.append(new_set)
-            else:
-                while wild_cards and sets:
-                    sets[0].append(wild_cards.pop())
-                    print("Paring up wild card with a set: {}".format(sets[0]))
-                break
-
-        print('runs:')
-        for r in runs:
-            show_hand(r)
-        print('\nsets:')
-        for s in sets:
-            show_hand(s)
-
-        cards_used2 = sum([len(r) for r in runs + sets])
-        #print('taking cards: ', cards_used2)
-
-        if cards_used2 == round_number or len(vsort_value2) < 1:
-            break
-
-        if cards_used > cards_used2:
-            discard(vsort_suit, player1.hand)
-        else:
-            discard(vsort_value2, player1.hand)
-        new_card = game.deal()
-        print("Drew: ", new_card)
-        if new_card.int_value == 14 or new_card.int_value == round_number:
-            player1.wild_cards.append(new_card)
-        else:
-            player1.hand.append(new_card)
-
-        print("NEXT TURN")
-        print(show_hand(player1.hand + player1.wild_cards))
-
-    print(f'WON in {rounds} rounds!')
+    print(f'\nWON in {game.rounds} rounds!')
