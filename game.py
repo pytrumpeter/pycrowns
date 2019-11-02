@@ -83,6 +83,7 @@ class Game:
             last_card = card
         if len(run) > 2:
             return run
+        print('returnin none')
         return []
 
     def check_for_run(self):
@@ -104,20 +105,25 @@ class Game:
             last_card = card
         if len(run) > 2:
             return run
+        print('returnin none')
         return []
 
     def get_runs_or_sets(self, thing):
+        print("starting get runs or sets")
         sets = []
         while True:
             if thing == RUN:
                 run = self.check_for_run()
+                print("Found runs: ", run)
             else:
                 run = self.check_for_set()
+                print("Found sets: ", run)
             for c in run:
                 try:
                     self.unmatched.remove(c)
+                    print("removed ", c)
                 except ValueError:
-                    pass
+                    print(f"Couldnt' remove unmatched value {c}")
             if not run:
                 break
             sets.append(run)
@@ -134,6 +140,11 @@ class Game:
 
             if new_setrun:
                 setrun_obj.append(new_setrun)
+                for c in new_setrun:
+                    try:
+                        self.unmatched.remove(c)
+                    except ValueError:
+                        pass
             else:
                 if not setrun_obj:
                     break
@@ -194,6 +205,35 @@ class Game:
         print(f"**** {self.player.name}'s turn")
         print(show_hand(self.player.hand + self.player.wild_cards))
         print("\n")
+
+        # Simulate a whole turn to see if the last discard will be used
+
+        self.hand_save = self.player.hand.copy()
+        self.player.hand.append(self.discard_pile[-1])
+
+        print("CHECKING game with", self.discard_pile[-1])
+        discard_eval_cards_used1 = self.evaluate_sets_then_runs()
+        discard_eval_cards_used2 = self.evaluate_runs_then_sets()
+
+        print("CHECKING game without discard")
+        self.player.hand = self.hand_save
+        no_discard_eval_cards_used1 = self.evaluate_sets_then_runs()
+        no_discard_eval_cards_used2 = self.evaluate_runs_then_sets()
+
+        if discard_eval_cards_used1 + discard_eval_cards_used2 > no_discard_eval_cards_used1 + no_discard_eval_cards_used2:
+            self.player.hand = self.hand_save
+            self.player.hand.append(self.pickup_discard())
+            print("picking up discard")
+        else:
+            self.player.hand = self.hand_save
+            new_card = self.deal()
+            if new_card.int_value == 14 or new_card.int_value == round_number:
+                self.player.wild_cards.append(new_card)
+            else:
+                self.player.hand.append(new_card)
+            print("Drew", new_card)
+        # Now actually play the hand
+
         self.unmatched = []
 
         cards_used = self.evaluate_sets_then_runs()
@@ -214,13 +254,6 @@ class Game:
             self.discard(first_unmatched)
         else:
             self.discard(self.unmatched)
-        new_card = game.deal()
-
-        print("**** Drew: ", new_card)
-        if new_card.int_value == 14 or new_card.int_value == round_number:
-            self.player.wild_cards.append(new_card)
-        else:
-            self.player.hand.append(new_card)
 
         print("**** NEXT TURN")
         print(show_hand(self.player.hand + self.player.wild_cards))
@@ -234,13 +267,17 @@ class Game:
 
         self.sets = self.get_runs_or_sets(SET)
 
-        self.check_wild_cards(SET)
+        ws = self.check_wild_cards(SET)
+        # if ws:
+        #     self.sets.append(ws)
 
         self.unmatched = self.sort_by_suit(self.unmatched)
 
         self.runs = self.get_runs_or_sets(RUN)
 
-        self.check_wild_cards(RUN)
+        wr = self.check_wild_cards(RUN)
+        # if wr:
+        #     self.runs.append(wr)
 
         print("FIRST PASS")
         print('runs:')
@@ -263,16 +300,20 @@ class Game:
         self.wild_cards_copy = self.player.wild_cards.copy()
         self.runs = []
         self.sets = []
-
+        print("gonna call get runs or sts")
         self.runs = self.get_runs_or_sets(RUN)
 
-        self.check_wild_cards(RUN)
+        wr = self.check_wild_cards(RUN)
+        # if wr:
+        #     self.runs.append(wr)
 
         self.unmatched = self.sort_by_rank(self.unmatched)
 
         self.sets = self.get_runs_or_sets(SET)
 
-        self.check_wild_cards(SET)
+        ws = self.check_wild_cards(SET)
+        # if ws:
+        #     self.sets.append(ws)
 
         print("SECOND PASS:")
         print('\nruns:')
